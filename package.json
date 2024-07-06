@@ -2,18 +2,19 @@
     "name": "com.xrtoolkit.cameraorbit",
     "version": "1.1.0",
     "displayName": "CameraOrbit",
-    "description": "This is my custom Unity package.",
+    "description": "摄影机全局视角控制。",
     "unity": "2022.3",
     "dependencies": {
       "com.unity.nuget.newtonsoft-json": "3.2.1"
     },
     "keywords": [
-      "CameraOrbit"
+      "CameraOrbit"，
+	  "Camera"
     ],
     "author": {
       "name": "LEI",
       "email": "yuhonglei86@gmail.com",
-      "url": ""
+      "url": "https://git.hongleiyu.com:8443/XRToolkit/CameraOrbit"
     }
   }
   
