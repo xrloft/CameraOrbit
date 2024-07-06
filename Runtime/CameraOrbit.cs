@@ -12,16 +12,16 @@ namespace XRToolkit
         //目标点
         public Transform target;
         //水平旋转速度
-        public float speedX = 200f;
+        public float rotationSpeedX = 200f;
         //垂直旋转速度
-        public float speedY = 200f;
+        public float rotationSpeedY = 200f;
         //视角缩放速度
-        public float speed = 100f;
-        public AnimationCurve speedCurve = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);
+        public float zoomSpeed = 100f;
+        public AnimationCurve zoomSpeedCurve = AnimationCurve.Linear(0.0f, 0.0f, 1.0f, 1.0f);
         //垂直旋转最小角度
-        public float minY = 0f;
+        public float minVerticalAngle = 0f;
         //垂直旋转最高角度
-        public float maxY = 90f;
+        public float maxVerticalAngle = 90f;
         //视角距离
         public float distance = 100f;
         //视角最小距离
@@ -29,35 +29,35 @@ namespace XRToolkit
         //视角最大距离
         public float maxDistance = 200f;
         //是否开启阻尼
-        public bool isDamping = true;
+        public bool useDamping = true;
         //阻尼值
-        public float damping = 5.0f;
+        public float dampingFactor = 5.0f;
         //是否开启拖拽
-        public bool isDrag=true;
+        public bool enableDragging=true;
         //是否开启目标点垂直移动
-        public bool isTargetMove;
+        public bool allowTargetVerticalMovement;
         //目标点移动速度
         public float targetMoveSpeed = 10f;
         //目标点最小高度
         public float targetMinHeight = -10f;
         //目标点最大高度
         public float targetMaxHeight = 40f;
+        // 水平旋转角度
+        public float horizontalRotation = 0.0f;
+        // 垂直旋转角度
+        public float verticalRotation = 0.0f;
+        private Vector3 previousMousePosition = Vector3.zero;
 
-
-        public float x = 0.0f;
-        public float y = 0.0f;
-        private Vector3 prevPos = Vector3.zero;
-
-        private float originalX;
-        private float originalY;
-        private float originalDistance;
-        private Vector3 originalTargetPosition;
-        private Vector3 originalCameraPosition;
-        private Quaternion originalCameraRotation;
-        // 地面的高度
-        public float groundHeight = 0f;
-        // 离地面最近的距离
-        public float groundOffset = 1f; 
+        private float initialHorizontalRotation;
+        private float initialVerticalRotation;
+        private float initialDistance;
+        private Vector3 initialTargetPosition;
+        private Vector3 initialCameraPosition;
+        private Quaternion initialCameraRotation;
+       
+        //地面层
+        public float groundOffset = 1f;
+        public LayerMask groundLayer;
         #endregion
         private void Start()
         {
@@ -68,61 +68,66 @@ namespace XRToolkit
             }
 
             Vector3 angles = transform.eulerAngles;
-            x = angles.y;
-            y = angles.x;
+            horizontalRotation = angles.y;
+            verticalRotation = angles.x;
             //记录相机初始位置
-            SetOriginalLocation();
+            SaveInitialCameraPosition();
         }
         private void Update()
         {
-            OnRotate();
-            PushAndPull();
-            if (isDrag)
-                OnDrag();
-            if(isTargetMove)
-                OnTargetMove();
+            HandleRotation();
+            HandleZoom();
+            if (enableDragging) HandleDragging();
+            if (allowTargetVerticalMovement) HandleTargetVerticalMovement();
+            CheckGroundCollision(transform.position);
         }
         #region Private Function
         /// <summary>
         /// 旋转
         /// </summary>
-        private void OnRotate()
+        private void HandleRotation()
         {
             if (Input.GetMouseButton(1))
             {
-                x += Input.GetAxis("Mouse X") * speedX * 0.02f;
-                y -= Input.GetAxis("Mouse Y") * speedY * 0.02f;
-                y = ClampAngle(y, minY, maxY);
+                horizontalRotation += Input.GetAxis("Mouse X") * rotationSpeedX * 0.02f;
+                verticalRotation -= Input.GetAxis("Mouse Y") * rotationSpeedY * 0.02f;
+                verticalRotation = ClampAngle(verticalRotation, minVerticalAngle, maxVerticalAngle);
             }
 
-            var rotation = Quaternion.Euler(y, x, 0.0f);
+            var rotation = Quaternion.Euler(verticalRotation, horizontalRotation, 0.0f);
             Vector3 disVector = new Vector3(0.0f, 0.0f, -distance);
             Vector3 position = rotation * disVector + target.position;
-
-            // 检测地面
-            if (position.y < groundHeight + groundOffset)
+            if (useDamping)
             {
-                position.y = groundHeight + groundOffset;
-            }
-
-            if (isDamping)
-            {
-                transform.rotation = Quaternion.Lerp(transform.rotation, rotation, Time.deltaTime * damping);
-                transform.position = Vector3.Lerp(transform.position, position, Time.deltaTime * damping);
+                transform.rotation = Quaternion.Lerp(transform.rotation, rotation, Time.deltaTime * dampingFactor);
+                transform.position = Vector3.Lerp(transform.position, position, Time.deltaTime * dampingFactor);
             }
             else
             {
                 transform.SetPositionAndRotation(position, rotation);
             }
         }
+
+        private void CheckGroundCollision(Vector3 position)
+        {
+            RaycastHit hit;
+            if (Physics.Raycast(transform.position, -Vector3.up, out hit, Mathf.Infinity, groundLayer))
+            {
+                if (hit.distance < groundOffset)
+                {
+                    transform.position = new Vector3(transform.position.x, hit.point.y + groundOffset, transform.position.z);
+                }
+            }
+        }
+
         /// <summary>
         /// 推拉
         /// </summary>
-        private void PushAndPull()
+        private void HandleZoom()
         {
             // 将距离归一化到0到1之间
             float normalizedDistance = distance / maxDistance;
-            float s = speed * speedCurve.Evaluate(normalizedDistance);
+            float s = zoomSpeed * zoomSpeedCurve.Evaluate(normalizedDistance);
             if (!EventSystem.current.IsPointerOverGameObject())
                 distance -= Input.GetAxis("Mouse ScrollWheel") * s;
             distance = Mathf.Clamp(distance, minDistance, maxDistance);
@@ -130,55 +135,55 @@ namespace XRToolkit
         /// <summary>
         /// 拖拽
         /// </summary>
-        private void OnDrag()
+        private void HandleDragging()
         {
             if (Input.GetMouseButtonDown(2))
             {
-                var screen = GetComponent<Camera>().WorldToScreenPoint(target.position);
-                prevPos = new Vector3(Input.mousePosition.x, Input.mousePosition.y, screen.z);
+                previousMousePosition = GetMouseWorldPosition(target.position);
             }
+
             if (Input.GetMouseButtonUp(2))
-                prevPos = Vector3.zero;
-            if (!Input.GetMouseButton(2)) return;
-            if (EventSystem.current.IsPointerOverGameObject()) return;
-            var position = target.position;
-            var screenSpace = GetComponent<Camera>().WorldToScreenPoint(position);
-            var currPos = new Vector3(Input.mousePosition.x, Input.mousePosition.y, screenSpace.z);
-            var prev = GetComponent<Camera>().ScreenToWorldPoint(prevPos);
-            var curr = GetComponent<Camera>().ScreenToWorldPoint(currPos);
-            var offset = curr - prev;
+            {
+                previousMousePosition = Vector3.zero;
+            }
+
+            if (!Input.GetMouseButton(2) || EventSystem.current.IsPointerOverGameObject()) return;
+
+            Vector3 currentMousePosition = GetMouseWorldPosition(target.position);
+            Vector3 offset = currentMousePosition - previousMousePosition;
             offset.y = 0;
-            position += -offset;
-            target.position = position;
-            prevPos = currPos;
+            target.position -= offset;
+            previousMousePosition = currentMousePosition;
+        }
+        private Vector3 GetMouseWorldPosition(Vector3 referencePosition)
+        {
+            var screenPosition = GetComponent<Camera>().WorldToScreenPoint(referencePosition);
+            return GetComponent<Camera>().ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, screenPosition.z));
         }
         /// <summary>
         /// 目标点垂直移动
         /// </summary>
-        private void OnTargetMove()
+        private void HandleTargetVerticalMovement()
         {
             if (Input.GetKey(KeyCode.UpArrow))
-                target.transform.Translate(0, Time.deltaTime * targetMoveSpeed, 0);
+                target.Translate(0, Time.deltaTime * targetMoveSpeed, 0);
             else if (Input.GetKey(KeyCode.DownArrow))
-                target.transform.Translate(0, Time.deltaTime * targetMoveSpeed * -1, 0);
+                target.Translate(0, Time.deltaTime * targetMoveSpeed * -1, 0);
 
-            var pos = target.transform.position;
-            if (pos.y <= targetMinHeight)
-                target.transform.position = new Vector3(pos.x, targetMinHeight, pos.z);
-            if (pos.y >= targetMaxHeight)
-                target.transform.position = new Vector3(pos.x, targetMaxHeight, pos.z);
+            target.position = new Vector3(target.position.x, Mathf.Clamp(target.position.y, targetMinHeight, targetMaxHeight), target.position.z);
         }
+
         /// <summary>
         /// 记录相机初始位置
         /// </summary>
-        private void SetOriginalLocation()
+        private void SaveInitialCameraPosition()
         {
-            originalCameraPosition = this.transform.position;
-            originalCameraRotation = this.transform.rotation;
-            originalTargetPosition = target.position;
-            originalX = x;
-            originalY = y;
-            originalDistance = distance;
+            initialCameraPosition = this.transform.position;
+            initialCameraRotation = this.transform.rotation;
+            initialTargetPosition = target.position;
+            initialHorizontalRotation = horizontalRotation;
+            initialVerticalRotation = verticalRotation;
+            initialDistance = distance;
         }
         /// <summary>
         /// 视角限制
@@ -203,11 +208,11 @@ namespace XRToolkit
         /// </summary>
         public void ResetCamera()
         {
-            transform.SetPositionAndRotation(originalCameraPosition, originalCameraRotation);
-            target.position = originalTargetPosition;
-            x = originalX;
-            y = originalY;
-            distance = originalDistance;
+            transform.SetPositionAndRotation(initialCameraPosition, initialCameraRotation);
+            target.position = initialTargetPosition;
+            horizontalRotation = initialHorizontalRotation;
+            verticalRotation = initialVerticalRotation;
+            distance = initialDistance;
         }
         /// <summary>
         /// 设置视角
@@ -216,10 +221,10 @@ namespace XRToolkit
         public void SetView(CameraLocation data)
         {
             var t = this.transform;
-            t.SetPositionAndRotation(data.Position, Quaternion.Euler(data.Rotation));
-            target.position = data.Pivot;
-            x = data.Xy.x;
-            y = data.Xy.y;
+            t.SetPositionAndRotation(data.Position.ToVector3(), Quaternion.Euler(data.Rotation.ToVector3()));
+            target.position = data.Pivot.ToVector3();
+            horizontalRotation = data.HorizontalRotation;
+            verticalRotation = data.VerticalRotation;
             distance = data.Distance;
         }
         /// <summary>
@@ -235,14 +240,14 @@ namespace XRToolkit
         /// <summary>
         /// 设置视角
         /// </summary>
-        /// <param name="pivot"></param>
-        /// <param name="distance"></param>
-        /// <param name="x"></param>
-        /// <param name="y"></param>
-        public void SetView(Vector3 pivot, float distance, float x, float y)
+        /// <param name="pivot">目标点</param>
+        /// <param name="distance">距离</param>
+        /// <param name="horizontalRotation">水平旋转角度</param>
+        /// <param name="verticalRotation">垂直旋转角度</param>
+        public void SetView(Vector3 pivot, float distance, float horizontalRotation, float verticalRotation)
         {
-            this.x = x;
-            this.y = y;
+            this.horizontalRotation = horizontalRotation;
+            this.verticalRotation = verticalRotation;
             this.distance = distance;
             target.position = pivot;
         }
