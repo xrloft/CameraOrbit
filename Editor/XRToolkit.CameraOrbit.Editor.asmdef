@@ -1,0 +1,16 @@
+{
+    "name": "XRToolkit.CameraOrbit.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:2559381be39982646b96a6cee036c8c4"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
